@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Lily's Inner Plots</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#2a4a2a;font-family:'Silkscreen',monospace}
+#scene{position:relative;width:100vw;height:100vh;overflow:hidden}
+canvas#meadow{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+
+/* ── TITLE ── */
+#title{
+  position:absolute;top:3.5%;left:50%;transform:translateX(-50%);
+  text-align:center;pointer-events:none;z-index:10;white-space:nowrap
+}
+#title h1{
+  font-size:clamp(0.62rem,1.6vw,1rem);font-weight:700;color:#fff;
+  text-shadow:2px 2px 0 #1a3a1a,-1px -1px 0 #1a3a1a,1px -1px 0 #0a200a,-1px 1px 0 #0a200a;
+  letter-spacing:0.1em
+}
+#title p{
+  font-size:clamp(0.35rem,0.8vw,0.52rem);color:#dff3df;
+  opacity:0.82;margin-top:4px;letter-spacing:0.15em
+}
+
+/* ── BANK LABELS ── */
+.bank-label{
+  position:absolute;font-size:clamp(0.3rem,0.65vw,0.44rem);
+  color:rgba(255,255,255,0.45);pointer-events:none;z-index:6;
+  letter-spacing:0.12em;text-shadow:1px 1px 0 rgba(0,0,0,0.6)
+}
+
+/* ── PLOT POINTS ── */
+.plot-point{
+  position:absolute;cursor:pointer;z-index:20;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  border:none;background:none;padding:4px;text-decoration:none;
+  transition:transform 0.18s cubic-bezier(0.34,1.4,0.64,1)
+}
+.plot-point:hover,.plot-point:focus-visible{transform:translateY(-6px) scale(1.08)}
+.plot-point:focus-visible{outline:2px solid #F5D56E;outline-offset:3px;border-radius:2px}
+
+.pp-sprite{image-rendering:pixelated;filter:drop-shadow(0 3px 0 rgba(0,0,0,0.45));transition:filter 0.15s}
+.plot-point:hover .pp-sprite,.plot-point:focus-visible .pp-sprite{
+  filter:drop-shadow(0 3px 0 rgba(0,0,0,0.45)) brightness(1.25)
+}
+
+.pp-label{
+  font-size:10px;font-weight:700;color:#fff;
+  background:rgba(8,22,8,0.9);padding:3px 7px;white-space:nowrap;
+  border:1px solid rgba(255,255,255,0.18);letter-spacing:0.06em;
+  opacity:0;transform:translateY(3px);transition:all 0.15s ease;pointer-events:none
+}
+.plot-point:hover .pp-label,.plot-point:focus-visible .pp-label{opacity:1;transform:translateY(0)}
+
+/* ── MAILBOX POPUP ── */
+#mailbox-popup{
+  position:absolute;z-index:50;
+  background:#0e1e0e;border:2px solid #5DBB63;
+  padding:13px 15px 15px;max-width:210px;min-width:182px;
+  transform:translateX(-50%);display:none;
+  animation:popIn 0.2s ease;box-shadow:0 6px 0 rgba(0,0,0,0.35)
+}
+#mailbox-popup.open{display:block}
+@keyframes popIn{from{transform:translateX(-50%) scale(0.82);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
+.mp-header{font-size:0.5rem;color:#5DBB63;letter-spacing:0.12em;margin-bottom:9px;padding-bottom:7px;border-bottom:1px solid #2A6B2E}
+.mp-body{font-size:0.47rem;color:#c8f0c8;line-height:1.85}
+.mp-close{position:absolute;top:5px;right:8px;background:none;border:none;color:#5DBB63;font-size:0.6rem;cursor:pointer;font-family:'Silkscreen',monospace}
+.mp-close:hover{color:#90e090}
+
+/* ── OVERLAY ── */
+#overlay{
+  position:absolute;bottom:0;left:0;right:0;height:62%;
+  background:#0a180a;border-top:3px solid #5DBB63;
+  z-index:60;padding:20px 30px 26px;overflow-y:auto;box-sizing:border-box;
+  transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.34,1.1,0.64,1)
+}
+#overlay.open{transform:translateY(0)}
+#overlay-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:11px;border-bottom:1px solid #1e3e1e}
+#overlay-title{font-size:clamp(0.5rem,1vw,0.7rem);font-weight:700;color:#5DBB63;letter-spacing:0.08em}
+#overlay-close{background:none;border:1px solid #2A6B2E;padding:3px 9px;cursor:pointer;color:#5DBB63;font-family:'Silkscreen',monospace;font-size:0.46rem;transition:background 0.15s}
+#overlay-close:hover{background:#162e16}
+.list-item{display:flex;align-items:flex-start;gap:13px;padding:11px 0;border-bottom:1px solid #142214}
+.list-item:last-child{border-bottom:none}
+.li-icon{font-size:1.15rem;flex-shrink:0;margin-top:1px}
+.li-body{flex:1}
+.li-title{font-size:0.54rem;font-weight:700;color:#c8f0c8;margin-bottom:4px;letter-spacing:0.04em}
+.li-sub{font-size:0.44rem;color:#5DBB63;margin-bottom:5px}
+.li-note{font-size:0.42rem;color:#6aaa6a}
+.progress-bar{display:flex;gap:2px;margin:5px 0 6px}
+.pb-seg{width:14px;height:4px;background:#182e18}
+.pb-seg.filled{background:#5DBB63}
+.project-card{background:#081208;border:1px solid #2A6B2E;padding:16px}
+.project-tag{display:inline-block;font-size:0.38rem;color:#3D9142;border:1px solid #2A6B2E;padding:2px 6px;margin-bottom:8px;letter-spacing:0.12em}
+.project-title{font-size:0.6rem;color:#c8f0c8;font-weight:700;margin-bottom:8px}
+.project-desc{font-size:0.44rem;color:#7aad7a;line-height:1.85}
+.project-link{display:inline-block;margin-top:12px;font-size:0.42rem;color:#5DBB63;text-decoration:none;border-bottom:1px solid #2A6B2E}
+.project-link:hover{color:#90e090}
+.project-footer{padding:9px 0;font-size:0.42rem;color:#3D9142}
+
+/* ── TIME TOGGLE ── */
+#tod-toggle{
+  position:absolute;top:12px;right:14px;z-index:30;
+  display:flex;gap:5px;pointer-events:all
+}
+.tod-btn{
+  background:rgba(8,20,8,0.7);border:1px solid rgba(93,187,99,0.4);
+  color:rgba(255,255,255,0.5);font-family:'Silkscreen',monospace;
+  font-size:0.38rem;padding:3px 6px;cursor:pointer;
+  transition:all 0.15s;letter-spacing:0.06em
+}
+.tod-btn:hover{border-color:#5DBB63;color:#fff}
+.tod-btn.active{border-color:#5DBB63;color:#fff;background:rgba(8,20,8,0.9)}
+
+/* ── FOOTER ── */
+#footer{
+  position:absolute;bottom:3%;left:3%;z-index:10;
+  font-size:clamp(0.32rem,0.68vw,0.46rem);color:rgba(255,255,255,0.52);
+  letter-spacing:0.1em;text-shadow:1px 1px 0 rgba(0,0,0,0.6);pointer-events:none
+}
+
+@media(max-width:600px){#overlay{height:78%;padding:14px 18px 20px}}
+
+@media(prefers-reduced-motion:reduce){
+  .plot-point{transition:none}
+  .pp-label{transition:none}
+  #overlay{transition:none}
+  #mailbox-popup{animation:none}
+}
+</style>
+</head>
+<body>
+<div id="scene" aria-label="Lily's Inner Plots meadow">
+  <canvas id="meadow" aria-hidden="true"></canvas>
+
+  <div id="title">
+    <h1>Lily's Inner Plots</h1>
+    <p>· because she just be doing stuff ·</p>
+  </div>
+
+  <div class="bank-label" id="label-left">· work &amp; craft ·</div>
+  <div class="bank-label" id="label-right">· life &amp; leisure ·</div>
+
+  <!-- LEFT — work & craft -->
+  <a id="pp-substack" class="plot-point" href="https://substack.com/@innerplots" target="_blank" rel="noopener" aria-label="Open Inner Plots Substack">
+    <canvas class="pp-sprite" width="16" height="16" data-sprite="scroll"></canvas>
+    <span class="pp-label">inner plots · substack</span>
+  </a>
+  <a id="pp-github" class="plot-point" href="https://github.com/unassuminglily" target="_blank" rel="noopener" aria-label="Open GitHub portfolio">
+    <canvas class="pp-sprite" width="16" height="16" data-sprite="lantern"></canvas>
+    <span class="pp-label">github · portfolio</span>
+  </a>
+  <button id="pp-project" class="plot-point" aria-label="See current project">
+    <canvas class="pp-sprite" width="16" height="16" data-sprite="sign"></canvas>
+    <span class="pp-label">current project</span>
+  </button>
+
+  <!-- MAILBOX — centre foreground -->
+  <button id="pp-mailbox" class="plot-point" aria-label="Read status message">
+    <canvas class="pp-sprite" width="16" height="20" data-sprite="mailbox"></canvas>
+    <span class="pp-label">what i'm up to</span>
+  </button>
+
+  <!-- RIGHT — life & leisure -->
+  <a id="pp-cooking" class="plot-point" href="https://www.instagram.com/lilybecooking/" target="_blank" rel="noopener" aria-label="Open lilybecooking on Instagram">
+    <canvas class="pp-sprite" width="16" height="16" data-sprite="basket"></canvas>
+    <span class="pp-label">lilybecooking · ig</span>
+  </a>
+  <button id="pp-reading" class="plot-point" aria-label="Open reading list">
+    <canvas class="pp-sprite" width="16" height="16" data-sprite="books"></canvas>
+    <span class="pp-label">reading list</span>
+  </button>
+  <button id="pp-music" class="plot-point" aria-label="Open listening list">
+    <canvas class="pp-sprite" width="16" height="16" data-sprite="music"></canvas>
+    <span class="pp-label">listening list</span>
+  </button>
+
+  <!-- MAILBOX POPUP -->
+  <div id="mailbox-popup" role="dialog" aria-label="Status message">
+    <button class="mp-close" id="mp-close" aria-label="Close">[ x ]</button>
+    <div class="mp-header">&#9658; right now</div>
+    <div class="mp-body">
+      &#9656; brainstorming children's books<br>
+      &#9656; datacamp + duolingo, daily<br>
+      &#9656; mapping out every H2 trip<br><br>
+      come back soon 🌿
+    </div>
+  </div>
+
+  <!-- CONTENT OVERLAY -->
+  <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
+    <div id="overlay-header">
+      <div id="overlay-title"></div>
+      <button id="overlay-close">[ close ]</button>
+    </div>
+    <div id="overlay-content"></div>
+  </div>
+
+  <!-- TIME OF DAY TOGGLE -->
+  <div id="tod-toggle" role="group" aria-label="Time of day">
+    <button class="tod-btn active" data-tod="day" aria-pressed="true">☀ day</button>
+    <button class="tod-btn" data-tod="dusk" aria-pressed="false">🌅 dusk</button>
+    <button class="tod-btn" data-tod="night" aria-pressed="false">🌙 night</button>
+  </div>
+
+  <div id="footer">🌿 tended by lily</div>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════
+// CANVAS SETUP
+// ═══════════════════════════════════════════════════
+const canvas = document.getElementById('meadow');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const PW = 384, PH = 216;
+canvas.width = PW; canvas.height = PH;
+
+function px(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
+
+// ═══════════════════════════════════════════════════
+// PALETTE
+// ═══════════════════════════════════════════════════
+const C = {
+  cloudW:'#EEF5E0', cloudS:'#C8DDB8',
+  distMd:'#5DA85A', distLt:'#72C46E',
+  midDk:'#3D8B3D', midLt:'#6CC46A',
+  fgDk:'#2A6B2E', fgMd:'#3D9142', fgLt:'#52AA55', fgVlt:'#68C46A',
+  hillLt:'#7ED87A', hillMd:'#5EC45A', hillDk:'#42A83E', hillSh:'#2E8030',
+  doorW:'#F0F0F0',
+  stW1:'#4A90D9', stW2:'#6AAEE0', stW3:'#3278B8', stFm:'#A8D8F4', stBnk:'#2A5A2A', stRck:'#6A5A48', stRckL:'#8A7A68',
+  pathD:'#8B7355', pathL:'#A89070',
+  flPk:'#F2A7C3', flYl:'#F5D56E', flWh:'#FFFFFF', flRd:'#E85A5A', flPp:'#C87ACC',
+  treeDk:'#1E5A1E', treeMd:'#2A7A2A', treeLt:'#3D9A3A', trunk:'#5A3E20',
+  sun:'#FFE566', sunGl:'#FFD700',
+};
+
+// ═══════════════════════════════════════════════════
+// TIME OF DAY
+// ═══════════════════════════════════════════════════
+let timeOfDay = 'day';
+
+function getMood(tod) {
+  if (tod === 'night') return { skyT:'#0E1A3A', skyM:'#26406E', skyH:'#46527A', tint:'rgba(14,22,55,0.46)', cel:'moon', stars:true, fireflies:true, clouds:false };
+  if (tod === 'dusk')  return { skyT:'#3E5C9A', skyM:'#E89B6B', skyH:'#FBD9A6', tint:'rgba(255,140,60,0.10)', cel:'dusksun', stars:false, fireflies:false, clouds:true };
+  return { skyT:'#5BB8D4', skyM:'#7ECEE6', skyH:'#A8E0C8', tint:null, cel:'sun', stars:false, fireflies:false, clouds:true };
+}
+
+// ═══════════════════════════════════════════════════
+// DETERMINISTIC FIELDS (seeded, not random)
+// ═══════════════════════════════════════════════════
+const stars = [];
+for (let i = 0; i < 55; i++) stars.push([(i*61) % PW, (i*37) % 56, (i%5===0) ? 2 : 1]);
+
+const fflies = [];
+for (let i = 0; i < 16; i++) fflies.push([210+(i*53)%170, 95+(i*41)%95, i]);
+
+// ═══════════════════════════════════════════════════
+// FLOWER POSITIONS
+// ═══════════════════════════════════════════════════
+function genFlowers(density) {
+  const left = [
+    [30,105,C.flPp,3],[55,118,C.flYl,4],[75,108,C.flWh,3],[100,122,C.flPk,4],
+    [35,135,C.flRd,5],[60,140,C.flYl,3],[85,132,C.flPp,4],[112,128,C.flWh,3],
+    [20,148,C.flPk,6],[45,155,C.flYl,4],[70,150,C.flWh,5],[95,158,C.flRd,4]
+  ];
+  const right = [
+    [240,107,C.flPk,4],[260,115,C.flYl,3],[278,108,C.flWh,4],[300,120,C.flPk,5],
+    [318,110,C.flRd,3],[340,118,C.flYl,4],[358,108,C.flPp,3],[375,115,C.flWh,4],
+    [248,130,C.flYl,5],[268,138,C.flPk,4],[285,125,C.flRd,5],[305,135,C.flYl,3],
+    [325,128,C.flWh,4],[348,132,C.flPp,5],[362,138,C.flPk,4],[378,130,C.flYl,3],
+    [235,150,C.flRd,6],[255,155,C.flPk,5],[272,148,C.flYl,6],[290,158,C.flWh,5],
+    [308,150,C.flPk,4],[330,155,C.flYl,5],[350,148,C.flRd,6],[368,155,C.flPp,5]
+  ];
+  let all = [...left, ...right];
+  const factor = { sparse:0.5, normal:1, lush:1.7 }[density] || 1;
+  if (factor < 1) {
+    all = all.filter((_, i) => (i*7)%10 >= (10 - Math.round(factor*10)));
+  } else if (factor > 1) {
+    const cols = [C.flPk, C.flYl, C.flWh, C.flRd, C.flPp];
+    const extra = Math.round(all.length * (factor - 1));
+    for (let i = 0; i < extra; i++) {
+      const s = (i*53) % all.length;
+      const base = all[s];
+      const x = Math.max(8, Math.min(PW-8, base[0] + ((i*29)%24) - 12));
+      const y = Math.max(100, Math.min(PH-14, base[1] + ((i*17)%18) - 9));
+      all.push([x, y, cols[i % cols.length], 3+(i%4)]);
+    }
+  }
+  return all;
+}
+let flowers = genFlowers('normal');
+let grassF = 1;
+
+// ═══════════════════════════════════════════════════
+// STREAM GEOMETRY
+// ═══════════════════════════════════════════════════
+function streamX(py) {
+  const t = (py-60) / (PH-60);
+  if (t < 0) return 185;
+  const mt = 1-t;
+  return Math.round(mt*mt*mt*185 + 3*mt*mt*t*165 + 3*mt*t*t*200 + t*t*t*172);
+}
+function streamW(py) {
+  const t = (py-60) / (PH-60);
+  if (t < 0) return 3;
+  return Math.round(3 + t*18);
+}
+
+// ═══════════════════════════════════════════════════
+// COLOUR UTILS
+// ═══════════════════════════════════════════════════
+function lerp(a, b, t) {
+  const ah = parseInt(a.slice(1),16), bh = parseInt(b.slice(1),16);
+  const ar=(ah>>16)&255, ag=(ah>>8)&255, ab=ah&255;
+  const br=(bh>>16)&255, bg=(bh>>8)&255, bb=bh&255;
+  const r=Math.round(ar+(br-ar)*t), g=Math.round(ag+(bg-ag)*t), bl=Math.round(ab+(bb-ab)*t);
+  return '#' + (((r<<16)|(g<<8)|bl)>>>0).toString(16).padStart(6,'0');
+}
+
+// ═══════════════════════════════════════════════════
+// DRAW — SKY
+// ═══════════════════════════════════════════════════
+function drawSky(tick) {
+  const M = getMood(timeOfDay);
+  for (let y = 0; y < 62; y++) {
+    ctx.fillStyle = lerp(M.skyT, M.skyM, y/62);
+    ctx.fillRect(0, y, PW, 1);
+  }
+  for (let y = 55; y < 68; y++) {
+    const a = 0.4 * (1-(y-55)/13);
+    ctx.fillStyle = timeOfDay==='night'
+      ? `rgba(70,82,122,${a})`
+      : `rgba(${timeOfDay==='dusk'?'251,217,166':'168,224,200'},${a})`;
+    ctx.fillRect(0, y, PW, 1);
+  }
+  if (M.stars) {
+    stars.forEach(([x,y,s],i) => {
+      const tw = (Math.floor(tick*0.7)+i)%7;
+      ctx.fillStyle = tw<5 ? 'rgba(255,255,245,0.9)' : 'rgba(255,255,245,0.4)';
+      ctx.fillRect(x, y, s, s);
+    });
+  }
+  drawCelestial(M);
+  if (M.clouds) {
+    drawCloud(30,10,44,13); drawCloud(296,8,44,15); drawCloud(338,24,28,10);
+    drawCloud(120,42,52,13); drawCloud(238,40,40,12);
+  }
+}
+
+function drawCelestial(M) {
+  if (M.cel === 'sun') {
+    px(22,8,10,10,C.sun); px(18,11,4,4,C.sunGl); px(26,9,4,4,C.sunGl);
+    [[14,12,3,2],[30,12,3,2],[21,5,2,3],[21,19,2,3],[16,6,2,2],[28,6,2,2],[16,18,2,2],[28,18,2,2]]
+      .forEach(([x,y,w,h]) => px(x,y,w,h,C.sunGl));
+  } else if (M.cel === 'dusksun') {
+    const cx=42, cy=40, r=11;
+    for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++)
+      if (dx*dx+dy*dy<=r*r) { const t=(dy+r)/(2*r); ctx.fillStyle=lerp('#FFD27A','#FF8A4A',t); ctx.fillRect(cx+dx,cy+dy,1,1); }
+  } else {
+    const cx=34, cy=22, r=9;
+    for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++)
+      if (dx*dx+dy*dy<=r*r) { ctx.fillStyle='#EAEFF7'; ctx.fillRect(cx+dx,cy+dy,1,1); }
+    ctx.fillStyle='#C7D2E2';
+    px(cx+2,cy-3,3,3); px(cx-4,cy+2,2,2); px(cx+3,cy+4,2,2);
+  }
+}
+
+function drawCloud(x, y, w, h) {
+  ctx.fillStyle=C.cloudS;
+  ctx.fillRect(x,y+h*0.55,w,h*0.45); ctx.fillRect(x+w*0.15,y+h*0.35,w*0.7,h*0.2);
+  ctx.fillStyle=C.cloudW;
+  ctx.fillRect(x+2,y+h*0.3,w-4,h*0.7); ctx.fillRect(x+w*0.12,y+h*0.12,w*0.76,h*0.5);
+  ctx.fillRect(x+w*0.28,y,w*0.44,h*0.3); ctx.fillRect(x+w*0.18,y+h*0.05,w*0.3,h*0.2);
+}
+
+// ═══════════════════════════════════════════════════
+// DRAW — MEADOW LAYERS
+// ═══════════════════════════════════════════════════
+function drawDistantMeadow() {
+  for (let y = 60; y < 80; y++) {
+    ctx.fillStyle = lerp(C.distLt, C.distMd, (y-60)/20);
+    ctx.fillRect(0, y, PW, 1);
+  }
+  [[40,70,C.flYl],[80,65,C.flWh],[120,68,C.flPk],[180,66,C.flYl],
+   [240,70,C.flWh],[290,67,C.flPk],[340,65,C.flYl],[360,72,C.flRd]]
+    .forEach(([x,y,c]) => { ctx.fillStyle=c; ctx.fillRect(x,y,2,1); ctx.fillRect(x+1,y-1,1,1); });
+}
+
+function drawDistantTrees() {
+  [[10,60,6,14],[28,58,8,16],[310,59,7,15],[330,61,5,12],[350,57,9,18],[370,60,6,13]]
+    .forEach(([x,y,w,h]) => {
+      px(x+Math.floor(w/2)-1,y+h-3,2,4,C.trunk);
+      px(x,y,w,h,C.treeDk); px(x+1,y,w-2,h-2,C.treeMd); px(x+1,y,w-2,3,C.treeLt);
+    });
+}
+
+function drawMidMeadow() {
+  for (let y = 78; y < 130; y++) {
+    ctx.fillStyle = lerp(C.midLt, C.midDk, (y-78)/52);
+    ctx.fillRect(0, y, PW, 1);
+  }
+  for (let y = 80; y < 128; y += 3)
+    for (let x = 0; x < PW; x += 6)
+      if (Math.sin(x*0.3+y*0.7) > 0.5) { ctx.fillStyle=C.midLt; ctx.fillRect(x,y,1,2); }
+}
+
+function drawStream(wf) {
+  for (let py = 62; py < PH-15; py++) {
+    const sx = streamX(py), sw = streamW(py);
+    if (sw < 2) continue;
+    ctx.fillStyle = C.stBnk; ctx.fillRect(sx-3,py,3,1); ctx.fillRect(sx+sw,py,3,1);
+    for (let i = 0; i < sw; i++) {
+      const t = i/sw;
+      ctx.fillStyle = (t<0.12||t>0.88) ? C.stW3 : (t<0.3||t>0.7) ? C.stW1 : C.stW2;
+      ctx.fillRect(sx+i, py, 1, 1);
+    }
+    const sparkleY = (py + wf*3) % 9;
+    if (sparkleY < 2 && sw > 6) {
+      const mid = sx + Math.floor(sw/2);
+      ctx.fillStyle = C.stFm; ctx.fillRect(mid-2,py,3,1);
+      if (sw > 12) ctx.fillRect(mid+4,py,2,1);
+    }
+    if (py > 90 && py%11 === 0) {
+      const rwL = 2+Math.round(Math.abs(Math.sin(py*0.4))*3);
+      ctx.fillStyle=C.stRck; ctx.fillRect(sx-3,py,rwL,2);
+      ctx.fillStyle=C.stRckL; ctx.fillRect(sx-2,py,rwL-1,1);
+      const rwR = 2+Math.round(Math.abs(Math.sin(py*0.5+2))*3);
+      ctx.fillStyle=C.stRck; ctx.fillRect(sx+sw+1,py,rwR,2);
+      ctx.fillStyle=C.stRckL; ctx.fillRect(sx+sw+1,py,rwR-1,1);
+    }
+    if (py >= 143 && py <= 146) {
+      const mid = sx+Math.floor(sw/2);
+      ctx.fillStyle=C.stRck;
+      ctx.fillRect(mid-8,py,5,3); ctx.fillRect(mid-1,py-1,5,3); ctx.fillRect(mid+6,py,5,3);
+      ctx.fillStyle=C.stRckL;
+      ctx.fillRect(mid-7,py,3,1); ctx.fillRect(mid,py-1,3,1); ctx.fillRect(mid+7,py,3,1);
+    }
+  }
+}
+
+function drawForegroundGrass() {
+  for (let y = 128; y < PH; y++) {
+    ctx.fillStyle = lerp(C.fgMd, C.fgDk, (y-128)/(PH-128));
+    ctx.fillRect(0, y, PW, 1);
+  }
+  for (let y = 130; y < PH-10; y += 4) {
+    const spacing = Math.max(2, Math.round((4+((y-130)/(PH-140))*3)*grassF));
+    for (let x = 0; x < PW; x += spacing) {
+      const sx = streamX(y), sw = streamW(y);
+      if (x > sx-6 && x < sx+sw+6) continue;
+      const h = 1+Math.round(((y-130)/(PH-140))*3);
+      ctx.fillStyle=C.fgLt; ctx.fillRect(x,y-h,1,h);
+      ctx.fillStyle=C.fgVlt; ctx.fillRect(x+1,y-h-1,1,h+1);
+      ctx.fillStyle=C.fgMd; ctx.fillRect(x+2,y-h+1,1,h-1);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// DRAW — HOUSE MOUND
+// ═══════════════════════════════════════════════════
+function drawArch(cx, cy, w, h, col) {
+  const hw = Math.floor(w/2);
+  ctx.fillStyle = col; ctx.fillRect(cx-hw, cy, w, h);
+  for (let dy = 0; dy <= hw; dy++) for (let dx = -hw; dx <= hw; dx++)
+    if (dx*dx+dy*dy <= hw*hw) ctx.fillRect(cx+dx, cy-dy, 1, 1);
+}
+
+function drawSunburst(cx, cy, r) {
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  for (let a = 0; a < 8; a++) {
+    const ang = (a/8)*Math.PI*2;
+    for (let d = 1; d <= r; d++)
+      ctx.fillRect(cx+Math.round(Math.cos(ang)*d), cy+Math.round(Math.sin(ang)*d), 1, 1);
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(cx-1,cy-1,3,3);
+}
+
+function drawFlowerSprite(x, y, col) {
+  ctx.fillStyle='#3D9142'; ctx.fillRect(x+1,y+1,1,3);
+  ctx.fillStyle=col;
+  ctx.fillRect(x,y,1,1); ctx.fillRect(x+2,y,1,1);
+  ctx.fillRect(x+1,y-1,1,1); ctx.fillRect(x+1,y+1,1,1);
+  ctx.fillStyle='#F5D56E'; ctx.fillRect(x+1,y,1,1);
+}
+
+function drawHouseMound() {
+  const cx=192, cy=138, rx=65, ry=30;
+  for (let y = cy-ry; y <= cy+ry; y++) for (let x = cx-rx; x <= cx+rx; x++) {
+    const dx=(x-cx)/rx, dy=(y-cy)/ry;
+    if (dx*dx+dy*dy <= 1.0) {
+      ctx.fillStyle = dy<-0.4?C.hillLt:dy<0.1?C.hillMd:dy<0.6?C.hillDk:C.hillSh;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  ctx.fillStyle = C.hillLt;
+  for (let x = cx-38; x <= cx+38; x++) {
+    const dy = Math.round(-ry*Math.sqrt(Math.max(0,1-((x-cx)/rx)**2)));
+    ctx.fillRect(x, cy+dy, 1, 2);
+  }
+
+  const hx=cx, hy=cy+4;
+  drawArch(hx, hy-2, 22, 28, C.doorW);
+  drawArch(hx, hy-2, 18, 24, '#181818');
+  ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(hx-6,hy-14,4,12);
+  drawSunburst(hx, hy-8, 7);
+
+  ctx.fillStyle='#4A3A2A'; ctx.fillRect(cx+28,cy-ry+4,6,18);
+  ctx.fillStyle='#6A5A4A'; ctx.fillRect(cx+28,cy-ry+4,6,4);
+  const sa = timeOfDay==='night' ? 0.35 : 0.5;
+  ctx.fillStyle=`rgba(220,230,215,${sa})`; ctx.fillRect(cx+27,cy-ry-2,4,4); ctx.fillRect(cx+26,cy-ry-6,5,4); ctx.fillRect(cx+28,cy-ry-10,4,4);
+  ctx.fillStyle=`rgba(220,230,215,${sa*0.6})`; ctx.fillRect(cx+25,cy-ry-13,6,4);
+
+  const wg = timeOfDay==='night' ? '#FFE08A' : '#CDE3EC';
+  ctx.fillStyle='#F0F0F0'; ctx.fillRect(cx-40,cy-2,9,9); ctx.fillRect(cx+31,cy-2,9,9);
+  ctx.fillStyle=wg; ctx.fillRect(cx-39,cy-1,7,7); ctx.fillRect(cx+32,cy-1,7,7);
+  ctx.fillStyle='#9AAFB8';
+  ctx.fillRect(cx-36,cy-1,1,7); ctx.fillRect(cx-39,cy+2,7,1);
+  ctx.fillRect(cx+35,cy-1,1,7); ctx.fillRect(cx+32,cy+2,7,1);
+
+  [[cx-50,cy+8],[cx-42,cy+14],[cx-36,cy+6],[cx+35,cy+7],[cx+44,cy+12],[cx+52,cy+5]]
+    .forEach(([fx,fy]) => drawFlowerSprite(fx,fy,C.flPk));
+  drawFlowerSprite(cx-28,cy+16,C.flYl); drawFlowerSprite(cx+28,cy+15,C.flWh);
+}
+
+// ═══════════════════════════════════════════════════
+// DRAW — FLOWERS + PATH + FX
+// ═══════════════════════════════════════════════════
+function drawWildflower(x, y, col, stemH) {
+  ctx.fillStyle='#3D9142'; ctx.fillRect(x+1,y-stemH+2,1,stemH-2);
+  ctx.fillStyle=col;
+  ctx.fillRect(x,y-stemH,1,1); ctx.fillRect(x+2,y-stemH,1,1);
+  ctx.fillRect(x+1,y-stemH-1,1,1); ctx.fillRect(x+1,y-stemH+1,1,1);
+  ctx.fillStyle='#F5D56E'; ctx.fillRect(x+1,y-stemH,1,1);
+}
+function drawFlowers() { flowers.forEach(([x,y,col,h]) => drawWildflower(x,y,col,h)); }
+
+function drawPath() {
+  for (let y = 160; y < PH-4; y++) {
+    const t=(y-160)/(PH-164), pw=Math.round(4+t*10);
+    const px2=Math.round(192+Math.sin(y*0.08)*4)-Math.floor(pw/2);
+    ctx.fillStyle = y%2===0 ? C.pathD : C.pathL;
+    ctx.fillRect(px2, y, pw, 1);
+    ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.fillRect(px2,y,1,1); ctx.fillRect(px2+pw-1,y,1,1);
+  }
+}
+
+function drawTint() {
+  const M = getMood(timeOfDay);
+  if (!M.tint) return;
+  ctx.fillStyle = M.tint; ctx.fillRect(0,0,PW,PH);
+}
+
+function drawFireflies(tick) {
+  fflies.forEach(([bx,by,i]) => {
+    const x = bx+Math.round(Math.sin(tick*0.3+i)*5);
+    const y = by+Math.round(Math.cos(tick*0.22+i*1.3)*4);
+    const blink = (Math.floor(tick*0.6)+i)%6;
+    if (blink < 4) {
+      ctx.fillStyle='rgba(245,255,150,0.85)'; ctx.fillRect(x,y,1,1);
+      ctx.fillStyle='rgba(220,255,120,0.25)';
+      ctx.fillRect(x-1,y,1,1); ctx.fillRect(x+1,y,1,1);
+      ctx.fillRect(x,y-1,1,1); ctx.fillRect(x,y+1,1,1);
+    }
+  });
+}
+
+function drawVignette() {
+  for (let x = 0; x < 8; x++) {
+    ctx.fillStyle=`rgba(0,0,0,${0.06*(8-x)})`;
+    ctx.fillRect(x,0,1,PH); ctx.fillRect(PW-1-x,0,1,PH);
+  }
+  ctx.fillStyle='rgba(0,0,0,0.12)'; ctx.fillRect(0,PH-8,PW,8);
+}
+
+// ═══════════════════════════════════════════════════
+// MAIN DRAW LOOP
+// ═══════════════════════════════════════════════════
+function draw(wf, tick) {
+  ctx.clearRect(0,0,PW,PH);
+  drawSky(tick);
+  drawDistantMeadow();
+  drawMidMeadow();
+  drawDistantTrees();
+  drawStream(wf);
+  drawForegroundGrass();
+  drawHouseMound();
+  drawFlowers();
+  drawPath();
+  drawTint();
+  if (getMood(timeOfDay).fireflies) drawFireflies(tick);
+  drawVignette();
+}
+
+// ═══════════════════════════════════════════════════
+// SPRITES
+// ═══════════════════════════════════════════════════
+const sprites = {
+  scroll(c) {
+    const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+    x.fillStyle='#7A5230'; x.fillRect(6,0,4,16); x.fillStyle='#5A3E20'; x.fillRect(7,0,2,16);
+    x.fillStyle='#F5E6C8'; x.fillRect(0,2,12,9); x.fillStyle='#E0CFA0'; x.fillRect(0,2,12,1); x.fillRect(0,10,12,1);
+    x.fillStyle='#7A5230'; x.fillRect(2,4,8,1); x.fillRect(2,6,6,1); x.fillRect(2,8,7,1);
+    x.fillStyle='#C8A870'; x.fillRect(0,2,2,9); x.fillRect(10,2,2,9);
+    x.fillStyle='#CC3333'; x.fillRect(5,1,2,2);
+  },
+  lantern(c) {
+    const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+    x.fillStyle='#888'; x.fillRect(6,0,4,2); x.fillRect(5,2,6,2);
+    x.fillStyle='#4A3820'; x.fillRect(4,4,8,10);
+    x.fillStyle='rgba(245,213,110,0.85)'; x.fillRect(5,5,6,8);
+    x.fillStyle='#FFF5A0'; x.fillRect(6,6,4,5);
+    x.fillStyle='#3A2810'; x.fillRect(4,4,1,10); x.fillRect(11,4,1,10); x.fillRect(4,9,8,1);
+    x.fillStyle='#888'; x.fillRect(5,14,6,2);
+  },
+  sign(c) {
+    const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+    x.fillStyle='#7A5230'; x.fillRect(2,7,3,9); x.fillRect(11,7,3,9);
+    x.fillStyle='#C8A870'; x.fillRect(0,0,16,8); x.fillStyle='#B8986A'; x.fillRect(0,0,16,1); x.fillRect(0,7,16,1);
+    x.fillStyle='#5A3E20'; x.fillRect(2,2,5,1); x.fillRect(2,4,5,1); x.fillRect(2,6,4,1);
+    x.fillRect(9,3,5,1); x.fillRect(12,2,1,3);
+    x.fillStyle='#F5D56E'; x.fillRect(9,5,1,1); x.fillRect(11,5,1,1);
+  },
+  mailbox(c) {
+    c.width=16; c.height=20;
+    const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+    x.fillStyle='#888'; x.fillRect(6,13,3,7);
+    x.fillStyle='#CC3333'; x.fillRect(2,6,12,7);
+    x.fillStyle='#AA2222'; x.fillRect(2,3,12,4); x.fillRect(4,1,8,3); x.fillRect(6,0,4,2);
+    x.fillStyle='#881111'; x.fillRect(5,9,6,1);
+    x.fillStyle='#FF6644'; x.fillRect(14,5,1,5); x.fillRect(14,5,3,2);
+    x.fillStyle='rgba(255,255,255,0.22)'; x.fillRect(3,4,3,5);
+  },
+  basket(c) {
+    const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+    x.fillStyle='#8B6347'; x.fillRect(4,0,8,2); x.fillRect(3,1,2,3); x.fillRect(11,1,2,3);
+    x.fillStyle='#C8A055'; x.fillRect(2,4,12,9);
+    x.fillStyle='#A07840'; x.fillRect(2,5,12,1); x.fillRect(2,7,12,1); x.fillRect(2,9,12,1); x.fillRect(2,11,12,1);
+    x.fillStyle='#B08848'; for(let i=0;i<12;i+=3) x.fillRect(2+i,4,1,9);
+    x.fillStyle='#2A8B2A'; x.fillRect(5,2,2,3); x.fillRect(9,1,2,4);
+    x.fillStyle='#F2A7C3'; x.fillRect(7,3,2,2); x.fillStyle='#E85A2A'; x.fillRect(3,3,2,2);
+    x.fillStyle='#8B6347'; x.fillRect(3,13,10,2);
+  },
+  books(c) {
+    const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+    x.fillStyle='#3A6BC4'; x.fillRect(0,11,16,4); x.fillStyle='#2A5BAA'; x.fillRect(0,11,2,4);
+    x.fillStyle='#F5E6C8'; x.fillRect(2,12,12,1);
+    x.fillStyle='#C05040'; x.fillRect(1,7,14,5); x.fillStyle='#A03A2A'; x.fillRect(1,7,2,5);
+    x.fillStyle='#F5E6C8'; x.fillRect(3,9,9,1);
+    x.fillStyle='#3D9142'; x.fillRect(2,4,12,4); x.fillStyle='#2A6B2E'; x.fillRect(2,4,2,4);
+    x.fillStyle='#F5E6C8'; x.fillRect(4,6,7,1);
+    x.fillStyle='#F5D56E'; x.fillRect(10,3,2,4);
+    x.fillStyle='rgba(0,0,0,0.25)'; x.fillRect(1,15,15,1);
+  },
+  music(c) {
+    const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+    x.fillStyle='#1A1A1A'; x.fillRect(2,2,12,12);
+    [[2,2],[13,2],[2,13],[13,13]].forEach(([rx,ry]) => x.clearRect(rx,ry,2,2));
+    x.fillStyle='#333'; x.fillRect(4,4,8,8); x.fillStyle='#1A1A1A'; x.fillRect(5,5,6,6);
+    x.fillStyle='#C05040'; x.fillRect(6,6,4,4); x.fillStyle='#E06050'; x.fillRect(6,6,4,1);
+    x.fillStyle='#F5E6C8'; x.fillRect(7,7,2,2);
+    x.fillStyle='#F5D56E';
+    x.fillRect(12,0,2,1); x.fillRect(13,1,1,2); x.fillRect(12,3,2,1);
+    x.fillRect(0,5,1,1); x.fillRect(1,3,1,2); x.fillRect(0,2,2,1);
+  }
+};
+
+function paintSprites() {
+  document.querySelectorAll('.pp-sprite').forEach(c => {
+    const name = c.dataset.sprite;
+    if (sprites[name]) sprites[name](c);
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// PLOT POINT POSITIONING
+// ═══════════════════════════════════════════════════
+function positionPlotPoints() {
+  const W = window.innerWidth, H = window.innerHeight;
+  function place(id, bPct, lPct) {
+    const el = document.getElementById(id);
+    el.style.bottom = (bPct*H/100)+'px';
+    el.style.left   = (lPct*W/100)+'px';
+    el.style.right  = 'auto';
+    el.style.transform = 'none';
+  }
+  place('pp-substack', 42, 12);
+  place('pp-github',   52, 26);
+  place('pp-project',  35, 8);
+  place('pp-mailbox',  17, 54);
+  place('pp-cooking',  44, 66);
+  place('pp-reading',  52, 75);
+  place('pp-music',    36, 84);
+
+  document.getElementById('label-left').style.cssText  = `bottom:${H*0.22}px;left:${W*0.06}px`;
+  document.getElementById('label-right').style.cssText = `bottom:${H*0.22}px;right:${W*0.06}px`;
+}
+
+// ═══════════════════════════════════════════════════
+// MAILBOX POPUP
+// ═══════════════════════════════════════════════════
+const popup    = document.getElementById('mailbox-popup');
+const mpClose  = document.getElementById('mp-close');
+const mailboxBtn = document.getElementById('pp-mailbox');
+
+function positionPopup() {
+  const mb = mailboxBtn.getBoundingClientRect();
+  popup.style.left   = (mb.left + mb.width/2)+'px';
+  popup.style.bottom = (window.innerHeight - mb.top + 10)+'px';
+  popup.style.top    = 'auto';
+}
+
+mailboxBtn.addEventListener('click', () => {
+  if (popup.classList.contains('open')) {
+    popup.classList.remove('open');
+  } else {
+    overlay.classList.remove('open');
+    positionPopup();
+    popup.classList.add('open');
+    mpClose.focus();
+  }
+});
+mpClose.addEventListener('click', () => popup.classList.remove('open'));
+document.addEventListener('click', e => {
+  if (!mailboxBtn.contains(e.target) && !popup.contains(e.target))
+    popup.classList.remove('open');
+});
+
+// ═══════════════════════════════════════════════════
+// CONTENT OVERLAY
+// ═══════════════════════════════════════════════════
+const readingList = [
+  {icon:'📖', title:'The Wabi-Sabi House', sub:'Robyn Griggs Lawrence', note:'beautifully slow read ✨', progress:4},
+  {icon:'📕', title:'Braiding Sweetgrass', sub:'Robin Wall Kimmerer', note:'changed how i see plants entirely', progress:5},
+  {icon:'📗', title:'Salt Fat Acid Heat', sub:'Samin Nosrat', note:'re-reading with new eyes 🍳', progress:2},
+];
+const listeningList = [
+  {icon:'🎙️', title:"Conan O'Brien Needs a Friend", sub:'podcast', note:'for long kitchen sessions'},
+  {icon:'🎶', title:'Good News', sub:'Mac Miller · album', note:'current cooking soundtrack 🍃'},
+  {icon:'🌿', title:'Slow Radio', sub:'BBC Sounds · podcast', note:'perfect background for reading'},
+  {icon:'🎸', title:'Punisher', sub:'Phoebe Bridgers · album', note:'on repeat since forever'},
+];
+
+const overlay       = document.getElementById('overlay');
+const overlayTitle  = document.getElementById('overlay-title');
+const overlayContent= document.getElementById('overlay-content');
+const overlayClose  = document.getElementById('overlay-close');
+let overlayTrigger  = null;
+
+function openOverlay(type, triggerEl) {
+  popup.classList.remove('open');
+  overlayTrigger = triggerEl;
+
+  if (type === 'reading') {
+    overlayTitle.textContent = '▶ reading list';
+    overlayContent.innerHTML = readingList.map(it => `
+      <div class="list-item">
+        <span class="li-icon">${it.icon}</span>
+        <div class="li-body">
+          <div class="li-title">${it.title}</div>
+          <div class="li-sub">${it.sub}</div>
+          <div class="progress-bar">${[1,2,3,4,5].map(i=>`<div class="pb-seg${i<=it.progress?' filled':''}"></div>`).join('')}</div>
+          <div class="li-note">${it.note}</div>
+        </div>
+      </div>`).join('');
+  } else if (type === 'listening') {
+    overlayTitle.textContent = '▶ listening list';
+    overlayContent.innerHTML = listeningList.map(it => `
+      <div class="list-item">
+        <span class="li-icon">${it.icon}</span>
+        <div class="li-body">
+          <div class="li-title">${it.title}</div>
+          <div class="li-sub">${it.sub}</div>
+          <div class="li-note">${it.note}</div>
+        </div>
+      </div>`).join('');
+  } else if (type === 'project') {
+    overlayTitle.textContent = '▶ current project';
+    overlayContent.innerHTML = `
+      <div class="project-card">
+        <div class="project-tag">in progress · 2026</div>
+        <div class="project-title">lily's inner plots</div>
+        <div class="project-desc">
+          a personal landing page that is also a world.<br><br>
+          a pixel meadow where every link feels like it belongs — substack scrolls, github lanterns, a stream dividing work from play.<br><br>
+          tech: html · css · canvas api · headless cms (tbd)<br>
+          next: connect to sanity, add night-mode, plant more plot points.
+        </div>
+        <a href="https://github.com/unassuminglily" target="_blank" rel="noopener" class="project-link">view on github →</a>
+      </div>
+      <div class="project-footer">more projects incoming — this is just the one i'm most proud of right now 🌱</div>`;
+  }
+
+  overlay.classList.add('open');
+  overlayClose.focus();
+}
+
+function closeOverlay() {
+  overlay.classList.remove('open');
+  if (overlayTrigger) { overlayTrigger.focus(); overlayTrigger = null; }
+}
+
+document.getElementById('pp-reading').addEventListener('click', function() { openOverlay('reading', this); });
+document.getElementById('pp-music').addEventListener('click', function() { openOverlay('listening', this); });
+document.getElementById('pp-project').addEventListener('click', function() { openOverlay('project', this); });
+overlayClose.addEventListener('click', closeOverlay);
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeOverlay(); popup.classList.remove('open'); }
+});
+
+// ═══════════════════════════════════════════════════
+// TIME OF DAY TOGGLE
+// ═══════════════════════════════════════════════════
+document.querySelectorAll('.tod-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    timeOfDay = btn.dataset.tod;
+    document.querySelectorAll('.tod-btn').forEach(b => {
+      b.classList.toggle('active', b === btn);
+      b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+    });
+  });
+});
+
+// Auto-detect time of day from user's clock on first load
+(function autoDetectTOD() {
+  const h = new Date().getHours();
+  const tod = (h >= 20 || h < 6) ? 'night' : (h >= 18) ? 'dusk' : 'day';
+  if (tod !== 'day') {
+    timeOfDay = tod;
+    document.querySelectorAll('.tod-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.tod === tod);
+      b.setAttribute('aria-pressed', b.dataset.tod === tod ? 'true' : 'false');
+    });
+  }
+})();
+
+// ═══════════════════════════════════════════════════
+// ANIMATION LOOP
+// ═══════════════════════════════════════════════════
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let tick = 0, raf = null, hidden = false;
+
+function loop() {
+  tick += 0.16;
+  const wf = Math.floor(tick) % 6;
+  draw(wf, tick);
+  raf = requestAnimationFrame(loop);
+}
+
+function startLoop() {
+  cancelAnimationFrame(raf);
+  if (reduced) { draw(0, 0); return; }
+  loop();
+}
+
+document.addEventListener('visibilitychange', () => {
+  hidden = document.hidden;
+  if (!hidden) startLoop();
+  else cancelAnimationFrame(raf);
+});
+
+// ═══════════════════════════════════════════════════
+// RESIZE + INIT
+// ═══════════════════════════════════════════════════
+function onResize() {
+  canvas.style.width  = '100vw';
+  canvas.style.height = '100vh';
+  positionPlotPoints();
+  if (popup.classList.contains('open')) positionPopup();
+}
+
+window.addEventListener('resize', onResize);
+onResize();
+paintSprites();
+startLoop();
+</script>
+</body>
+</html>
