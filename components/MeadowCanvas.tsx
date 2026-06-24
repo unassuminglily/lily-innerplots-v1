@@ -276,12 +276,6 @@ const plotPos: Record<string,{b:number,l:number,sc:number}> = {
 }
 // Shifted left for portrait mobile — same vertical positions, tightened horizontal spread
 const plotPosMobile: Record<string,{b:number,l:number,sc:number}> = {
-  'pp-github':{b:56,l:7,sc:1},'pp-substack':{b:50,l:20,sc:1},
-  'pp-cooking':{b:50,l:58,sc:1.28},'pp-reading':{b:55,l:70,sc:1.28},
-  'pp-music':{b:46,l:81,sc:1.28},'pp-mailbox':{b:18,l:57,sc:1.35},
-}
-
-const plotPosMobile: Record<string,{b:number,l:number,sc:number}> = {
   'pp-github':{b:56,l:9,sc:1},'pp-substack':{b:50,l:19,sc:1},
   'pp-cooking':{b:50,l:55,sc:1.1},'pp-reading':{b:55,l:66,sc:1.1},
   'pp-music':{b:46,l:77,sc:1.1},'pp-mailbox':{b:18,l:54,sc:1.15},
