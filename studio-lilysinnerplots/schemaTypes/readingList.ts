@@ -4,7 +4,7 @@ export const readingList = defineType({
   name: 'readingList',
   title: 'Reading List',
   type: 'document',
-  __experimental_actions: ['update', 'discardChanges', 'publish'],
+  __experimental_actions: ['create', 'update', 'delete', 'publish'],
   fields: [
     defineField({
       name: 'books',

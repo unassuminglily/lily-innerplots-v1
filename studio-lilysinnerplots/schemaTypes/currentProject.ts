@@ -4,7 +4,7 @@ export const currentProject = defineType({
   name: 'currentProject',
   title: 'Current Project',
   type: 'document',
-  __experimental_actions: ['update', 'discardChanges', 'publish'],
+  __experimental_actions: ['create', 'update', 'delete', 'publish'],
   fields: [
     defineField({name: 'title', title: 'Title', type: 'string', validation: (Rule) => Rule.required()}),
     defineField({

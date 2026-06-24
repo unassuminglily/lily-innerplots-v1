@@ -4,7 +4,7 @@ export const listeningList = defineType({
   name: 'listeningList',
   title: 'Listening List',
   type: 'document',
-  __experimental_actions: ['update', 'discardChanges', 'publish'],
+  __experimental_actions: ['create', 'update', 'delete', 'publish'],
   fields: [
     defineField({
       name: 'tracks',

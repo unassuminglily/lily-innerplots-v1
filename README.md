@@ -6,11 +6,11 @@ Instead of a grid of links, this is a hand-drawn pixel meadow — a place you ca
 
 ## What it is
 
-A single self-contained HTML file. No frameworks, no build step, no dependencies beyond a Google Font. The entire scene is drawn at runtime on a `384×216` canvas using only `fillRect` calls, then CSS-scaled to fill the viewport with pixel-perfect rendering.
+A Next.js app backed by Sanity CMS. The entire scene is drawn at runtime on a `384×216` HTML canvas using only `fillRect` calls, then CSS-scaled to fill the viewport with pixel-perfect rendering. All editable content — the mailbox message, the chair note, reading list, listening list, and current project — is managed through Sanity Studio and served via GROQ queries with hourly ISR revalidation.
 
 ## What's in the scene
 
-- **Foreground tree + swing** on the left, where a scene-spot button lets you sit a while and read a note
+- **Foreground tree + swing** on the left — click to sit a while and read a note from the chair
 - **A stream** that meanders down the left side, widening toward the foreground with animated foam
 - **A cottage** center-right with a shingle roof, flower boxes, climbing roses, glowing windows at night, and a door you can click to see the current project
 - **Wildflower clusters** scattered around the stream banks
@@ -23,10 +23,10 @@ A single self-contained HTML file. No frameworks, no build step, no dependencies
 | Element | What it does |
 |---|---|
 | Plot points (sprites) | Hover to see label; click to follow link or open overlay |
-| Swing spot (`ss-chair`) | Opens a small encouraging note popup |
-| Cottage door (`ss-door`) | Opens the current project overlay |
-| Mailbox sprite | Opens a "what I'm working on" popup above it |
-| Reading list / Listening list | Open a bottom-sheet drawer with books and music |
+| Swing spot (`ss-chair`) | Opens the chair note popup — content from Sanity |
+| Cottage door (`ss-door`) | Opens the current project overlay — content from Sanity |
+| Mailbox sprite | Opens the "what I'm working on" popup — content from Sanity |
+| Reading list / Listening list | Open a bottom-sheet drawer — content from Sanity |
 | Time of day toggle | Switches between day, dusk, and night — changes sky colors, celestial body, mountain tones, and enables stars/fireflies |
 
 The time of day is set automatically from the system clock on load.
@@ -38,17 +38,61 @@ The time of day is set automatically from the system clock on load.
 - **Sprites** — Each plot-point icon is a small `<canvas>` element painted by a dedicated sprite function using `fillRect`. Six sprites total, all pixel-native.
 - **Responsive layout** — Plot points and scene spots are positioned by percentage of the viewport, recalculated on `resize`. Sprite scale steps down on tablet and mobile. Touch targets meet the 44px minimum.
 - **Accessibility** — All dialogs use `role="dialog"` and `aria-modal`. Toggle buttons have `aria-expanded` and `aria-pressed`. The overlay has a Tab focus trap. Escape closes the topmost open dialog and returns focus to its trigger. `:focus-visible` outlines on all interactive elements.
+- **CMS** — Sanity content is fetched server-side in `app/page.tsx` via parallel `Promise.all`, typed with TypeScript interfaces in `lib/types.ts`, and revalidated every 3600 seconds in production. The canvas client component receives all data as props.
 
-## Files
+## Content managed in Sanity
 
-| File | Description |
+| Document | What it controls |
 |---|---|
-| `index.html` | The entire site — HTML, CSS, and JS in one file |
-| `InnerPlotsV1.2/indexv1.1.html` | Archived V1.1 (Teletubbies mound, centered stream, no cottage) |
-| `CODE_SUMMARY.md` | Full technical reference: every function, section, and CSS rule documented |
+| Status Message | Text in the mailbox popup |
+| Chair Note | Text in the "sit a while" popup |
+| Reading List | Books shown in the reading list overlay |
+| Listening List | Music and podcasts in the listening overlay |
+| Current Project | Project card shown when clicking the cottage door |
+
+All five are singletons — one document per type, no create/delete in Studio.
+
+## File structure
+
+```
+VibingProjects/
+├── app/
+│   ├── globals.css          # All styles
+│   ├── layout.tsx           # Root layout, font import, metadata
+│   └── page.tsx             # Server component — fetches Sanity data, renders MeadowCanvas
+├── components/
+│   └── MeadowCanvas.tsx     # Client component — all canvas drawing, sprites, popups, interactions
+├── lib/
+│   ├── sanity.ts            # Sanity client (next-sanity)
+│   ├── types.ts             # TypeScript interfaces for all five content types
+│   └── queries.ts           # GROQ queries, one per content type
+├── studio-lilysinnerplots/  # Sanity Studio (separate app, deployed independently)
+│   └── schemaTypes/
+│       ├── statusMessage.ts
+│       ├── chairNote.ts
+│       ├── readingList.ts
+│       ├── listeningList.ts
+│       └── currentProject.ts
+├── InnerPlotsV1.2/
+│   └── indexv1.1.html       # Archived V1.1 (vanilla HTML, no CMS)
+├── index.html               # Archived V1.2 (vanilla HTML, pre-Next.js migration)
+├── .env.local.example       # Required env vars template
+└── CODE_SUMMARY.md          # Full technical reference
+```
+
+## Local development
+
+```bash
+# Site (Next.js)
+npm install
+cp .env.local.example .env.local   # fill in Sanity project ID + dataset
+npm run dev                         # http://localhost:3000
+
+# Studio (Sanity)
+cd studio-lilysinnerplots
+npm run dev                         # http://localhost:3333
+```
 
 ## Stack
 
-HTML · CSS · Canvas API · Silkscreen (Google Fonts)
-
-No build tools. No frameworks. Open `index.html` in a browser and it runs.
+Next.js 15 · React 19 · TypeScript · Canvas API · Sanity CMS · next-sanity · Silkscreen (Google Fonts)

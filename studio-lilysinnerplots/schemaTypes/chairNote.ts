@@ -4,7 +4,7 @@ export const chairNote = defineType({
   name: 'chairNote',
   title: 'Chair Note',
   type: 'document',
-  __experimental_actions: ['update', 'discardChanges', 'publish'],
+  __experimental_actions: ['create', 'update', 'delete', 'publish'],
   fields: [
     defineField({
       name: 'message',

@@ -4,7 +4,7 @@ export const statusMessage = defineType({
   name: 'statusMessage',
   title: 'Status Message',
   type: 'document',
-  __experimental_actions: ['update', 'discardChanges', 'publish'],
+  __experimental_actions: ['create', 'update', 'delete', 'publish'],
   fields: [
     defineField({
       name: 'message',

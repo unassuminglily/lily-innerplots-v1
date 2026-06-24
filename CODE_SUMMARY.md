@@ -1,149 +1,176 @@
-# `index.html` — Code Summary
+# Code Summary
 
-## HTML Structure
+## Architecture Overview
 
-**`<head>`**
-Loads Silkscreen font from Google Fonts; sets viewport meta for responsive scaling; contains the entire `<style>` block.
-
-**`#scene`**
-Full-viewport root container (`100vw × 100vh`). Everything is absolutely positioned inside it.
-
-| Element | Role |
-|---|---|
-| `canvas#meadow` | The pixel art canvas (`384×216` internal, CSS-scaled to fill viewport via `image-rendering: pixelated`) |
-| `#title` | Heading "lily's inner plots" + subtitle. Pointer-events disabled (decorative overlay). |
-| `.plot-point` × 6 | Interactive links/buttons over canvas landmarks. IDs: `pp-github`, `pp-substack`, `pp-cooking`, `pp-reading`, `pp-music`, `pp-mailbox`. |
-| `.scene-spot` × 2 | Transparent hotspot buttons over scene geometry. IDs: `ss-chair` (foreground swing area), `ss-door` (cottage door). |
-| `#mailbox-popup` | Small green terminal-style dialog for "what I'm working on". `role="dialog"`, `aria-modal`. |
-| `#chair-popup` | Cream/parchment centered dialog for an encouraging note. `role="dialog"`, `aria-modal`. |
-| `#overlay` | Bottom-sheet drawer for list content (reading, listening, project). `role="dialog"`, `aria-modal`, `aria-labelledby`. |
-| `#tod-toggle` | Three-button time-of-day toggle (day/dusk/night). `role="group"`, `aria-pressed` on each button. |
-| `#footer` | Static "tended by lily" credit, bottom-left. |
+The site is a **Next.js 15 app** with a **Sanity CMS** backend. The server component (`app/page.tsx`) fetches all content at request time and passes it as props to a single client component (`components/MeadowCanvas.tsx`) that owns the canvas, all drawing logic, and all UI interactions. The Sanity Studio lives in a separate directory (`studio-lilysinnerplots/`) and is deployed independently.
 
 ---
 
-## CSS Sections
+## Sanity Studio (`studio-lilysinnerplots/`)
 
-**Reset + base** — Box-sizing reset, `overflow:hidden` on html/body, full-viewport body.
+### `sanity.config.ts`
+Registers all schema types and configures the Structure Tool to show a flat "Site Content" sidebar with five singleton entries. The `templates` filter strips the default create-new buttons so documents can only be edited, not duplicated.
 
-**Canvas** — `image-rendering: pixelated/crisp-edges` to keep pixel art sharp when scaled.
+### `schemaTypes/`
+
+All five types use `__experimental_actions` to restrict available actions (create/update/delete/publish vary by type). All are queried by fixed `_id` strings matching their `_type` name, making them effectively singletons.
+
+| File | Document type | Fields |
+|---|---|---|
+| `statusMessage.ts` | `statusMessage` | `message` (text, required), `updatedAt` (datetime) |
+| `chairNote.ts` | `chairNote` | `message` (text, required) |
+| `readingList.ts` | `readingList` | `books[]` — each: `title`, `author`, `progress` (1–5), `note`, `order` |
+| `listeningList.ts` | `listeningList` | `tracks[]` — each: `title`, `source`, `note`, `order` |
+| `currentProject.ts` | `currentProject` | `title`, `status` (radio: 4 options), `description`, `techStack[]`, `nextSteps`, `githubUrl`, `liveUrl` |
+
+---
+
+## `lib/`
+
+### `lib/sanity.ts`
+Creates the Sanity client via `createClient` from `next-sanity`, using `NEXT_PUBLIC_SANITY_PROJECT_ID` and `NEXT_PUBLIC_SANITY_DATASET` env vars. `useCdn: true` for production edge caching.
+
+### `lib/types.ts`
+TypeScript interfaces for all five content types plus the aggregate `SiteData` interface passed as a prop to `MeadowCanvas`.
+
+| Interface | Shape |
+|---|---|
+| `StatusMessageData` | `{ message, updatedAt? }` |
+| `ChairNoteData` | `{ message }` |
+| `Book` | `{ title, author, progress, note?, order? }` |
+| `ReadingListData` | `{ books: Book[] }` |
+| `Track` | `{ title, source, note?, order? }` |
+| `ListeningListData` | `{ tracks: Track[] }` |
+| `ProjectStatus` | `'in progress' \| 'just shipped' \| 'on pause' \| 'coming soon'` |
+| `CurrentProjectData` | `{ title, status, description, techStack?, nextSteps?, githubUrl?, liveUrl? }` |
+| `SiteData` | All five nullable content types |
+
+### `lib/queries.ts`
+One exported async function per content type. Each calls `client.fetch` with a GROQ query, empty params, and `{ next: { revalidate: 3600 } }` for ISR. All queries filter by both `_type` and `_id` to target the singleton document. Array fields use `| order(order asc)` to respect the `order` field.
+
+| Function | Returns |
+|---|---|
+| `getStatusMessage()` | `StatusMessageData \| null` |
+| `getChairNote()` | `ChairNoteData \| null` |
+| `getReadingList()` | `ReadingListData \| null` |
+| `getListeningList()` | `ListeningListData \| null` |
+| `getCurrentProject()` | `CurrentProjectData \| null` |
+
+---
+
+## `app/`
+
+### `app/layout.tsx`
+Root layout. Imports `globals.css`. Sets `<html lang="en">` and page metadata (`title`, `description`).
+
+### `app/globals.css`
+All styles for the site. Loaded once by the layout. Key sections:
+
+**Reset + base** — Box-sizing reset, `overflow:hidden` on html/body, full-viewport body, Silkscreen font via `@import`.
+
+**Canvas** — `image-rendering: pixelated/crisp-edges` to keep pixel art sharp when CSS-scaled.
 
 **`.plot-point`** — Absolutely positioned flex column (sprite + label). Hover/focus-visible: `translateY(-6px) scale(1.08)`. Label fades in on hover. Focus ring via `:focus-visible`.
 
-**`.scene-spot`** — Absolutely positioned transparent buttons with `min-width/height: 44px` (touch target). On hover: amber glow border + background. Contains a `.ss-marker` (pulsing radial glow dot, `@keyframes pulseGlow`) and `.ss-label` (tooltip that appears above).
+**`.scene-spot`** — Absolutely positioned transparent buttons with `min-width/height: 44px` (touch target). On hover: amber glow border + background. Contains `.ss-marker` (pulsing radial glow, `@keyframes pulseGlow`) and `.ss-label` (tooltip above).
 
-**`#mailbox-popup`** — Dark green bordered popup, `position:absolute`, uses `transform: translateX(-50%)` for horizontal centering. Shows with `@keyframes popInX` (scale + fade). `.mp-close` has `min-height: 32px` and `:focus-visible` ring.
+**`#mailbox-popup`** — Dark green bordered popup, `position:absolute`, centered via `translateX(-50%)`. Opens with `@keyframes popInX`.
 
-**`#chair-popup`** — Cream parchment popup, fixed at viewport center via `top:46%; left:50%; transform: translate(-50%,-50%)`. Shows with `@keyframes popInXY`. `.cp-close` same pattern as above.
+**`#chair-popup`** — Cream parchment popup, fixed at viewport center. Opens with `@keyframes popInXY`.
 
-**`#overlay`** — Full-width drawer fixed to the bottom 62% of viewport. Hidden via `translateY(100%)`, slides up to `translateY(0)` on `.open` with a springy cubic-bezier. Contains `.list-item`, `.progress-bar`, `.project-card` sub-styles.
+**`#overlay`** — Full-width drawer at bottom 62% of viewport. Slides up from `translateY(100%)` to `translateY(0)` with springy cubic-bezier on `.open`.
 
-**`#tod-toggle` / `.tod-btn`** — Top-right fixed position. Buttons `min-height: 36px`, `display: inline-flex`. Active state highlighted green.
-
-**`#footer`** — Absolutely positioned, `clamp()` font size, `pointer-events: none`.
+**`.tod-btn`** — Top-right grouped buttons, `min-height: 36px`, `display: inline-flex`, green active state.
 
 **Media queries:**
-- `(max-width: 600px)` — Overlay taller (78%), title wraps (removes `white-space: nowrap`), TOD buttons slightly larger.
-- `(max-width: 380px)` — Mailbox popup font scales up slightly for readability.
-- `(prefers-reduced-motion: reduce)` — Disables all transitions, animations, and `ss-marker` pulse.
+- `(max-width: 600px)` — Overlay taller (78%), title wraps, TOD buttons slightly larger.
+- `(max-width: 380px)` — Mailbox popup font scaled up for readability.
+- `(prefers-reduced-motion: reduce)` — All transitions, animations, and the `ss-marker` pulse disabled.
+
+### `app/page.tsx`
+Server component. Calls all five query functions in a single `Promise.all`, assembles a `SiteData` object, and renders `<MeadowCanvas data={data}/>`. This is the only place data fetching happens — the canvas component receives everything as props and has no Sanity dependency.
 
 ---
 
-## JavaScript — Constants & State
+## `components/MeadowCanvas.tsx`
+
+The entire visual site. A `'use client'` component receiving `{ data: SiteData }`. Structured in two layers: module-level pure functions (all canvas drawing), and the React component itself (state, effects, event handlers, JSX).
+
+### Module-level constants
 
 **`PW = 384, PH = 216`** — Internal canvas resolution. All drawing uses these units; CSS scaling does the rest.
 
-**`px(x, y, w, h, c)`** — Micro-helper: `fillStyle = c; fillRect(x, y, w, h)`. Used for shorthand rect drawing throughout.
+**`C`** — Color palette object: cloud tones, meadow greens, stream blues, path browns, flower colors, tree greens, trunk browns, wood/rope colors, sun yellow.
 
-**`C` (color palette)** — Single object holding every named color used in drawing functions: cloud tones, meadow greens, stream blues, path browns, flower colors, tree greens, trunk browns, wood/rope colors, sun yellow.
+**`TOD`** — Type alias: `'day' | 'dusk' | 'night'`.
 
-**`timeOfDay`** — Global string, one of `'day'`, `'dusk'`, `'night'`. Drives all sky/tint/celestial/mountain color decisions.
+**`BOOK_ICONS`, `TRACK_ICONS`** — Emoji arrays cycled by index when rendering Sanity book/track lists (replaces hardcoded icons).
 
-**`getMood(tod)`** — Returns a mood object for the given time of day:
-- `skyT/skyM/skyH` — Sky gradient colors (top, middle, horizon)
-- `tint` — Optional color overlay string (`rgba(...)`)
-- `cel` — Celestial body type: `'sun'`, `'dusksun'`, `'moon'`
-- `mtn` — Mountain silhouette color
-- `stars`, `fireflies`, `clouds` — Boolean flags
+**`stars[]`** — 55 pre-computed `[x, y, size]` positions, deterministically generated.
 
-**`stars[]`** — 55 pre-computed `[x, y, size]` positions for the night sky, deterministically generated from index arithmetic.
+**`fflies[]`** — 16 pre-computed `[x, y, index]` firefly positions.
 
-**`fflies[]`** — 16 pre-computed `[x, y, index]` positions for firefly base coordinates.
+**`flowers[]`** — 36 pre-placed wildflower `[x, y, color, stemHeight]` entries in two foreground clusters, avoiding the stream.
 
-**`flowers[]`** — 36 pre-placed wildflower `[x, y, color, stemHeight]` entries. Two clusters: left foreground (x 24–116) and right foreground (x 238–378), avoiding the stream and the path.
+### Module-level geometry helpers
 
----
+**`streamX(py)`** — Cubic bezier giving the stream's x-position at canvas row `py`. Meanders left of center: x≈146 at horizon, control point x≈118, x≈112 at foreground.
 
-## JavaScript — Geometry Helpers
+**`streamW(py)`** — Stream width at row `py`. Grows 3px → 19px for foreshortening.
 
-**`streamX(py)`** — Cubic bezier curve giving the stream's x-position at canvas row `py`. Meanders LEFT of center: x≈146 at the horizon (py=60), curves through a control point near x=118, widens back to x≈112 at the foreground bottom.
+**`lerp(a, b, t)`** — Hex color interpolation across all three channels. Used for sky gradients and meadow transitions.
 
-**`streamW(py)`** — Stream width at row `py`. Grows from 3px at the horizon to 19px at the bottom, simulating foreshortening perspective.
+**`getMood(tod)`** — Returns a mood object `{ skyT, skyM, skyH, tint, cel, mtn, stars, fireflies, clouds }` for the given TOD. Drives every color decision in the draw pipeline.
 
-**`lerp(a, b, t)`** — Hex color interpolation. Parses two `#rrggbb` strings and linearly interpolates each channel. Used for sky gradients and meadow color transitions.
+### Module-level draw functions
 
----
+All accept `ctx: CanvasRenderingContext2D` as their first argument (no module-level canvas state).
 
-## JavaScript — Draw Functions
+**`px(ctx, x, y, w, h, c)`** — One-liner fillStyle + fillRect helper used throughout.
 
-**`drawSky(tick)`** — Draws the sky gradient row-by-row (lerp from top to middle, then middle to horizon). If `stars` flag: animates star twinkle using `tick`. Calls `drawCelestial`. If `clouds` flag: places 5 clouds at fixed positions.
+**`drawSky(ctx, tick, tod)`** — Row-by-row sky gradient. Animates star twinkle from `tick`. Calls `drawCelestial`. Places 5 clouds if `getMood.clouds`.
 
-**`drawCelestial(M)`** — Branches on `M.cel`:
-- `'sun'` — Small pixel sun at top-left with radiating rays
-- `'dusksun'` — Larger circular sun at center-right (`cx=212, cy=46`), gradient filled with amber glow halo
-- `'moon'` — Disc at `cx=42, cy=22` with grey crater markings
+**`drawCelestial(ctx, M)`** — Branches on `M.cel`: pixel sun (top-left, day), large gradient disc with glow halo (center-right, dusk), crater-marked moon disc (top-left, night).
 
-**`drawCloud(x, y, w, h)`** — Draws a single rounded pixel cloud using layered rects: shadow layer, highlight layer, puffy top caps.
+**`drawCloud(ctx, x, y, w, h)`** — Single cloud: shadow layer + highlight layer + puffy top caps.
 
-**`drawMountains()`** — Five mountain silhouettes, each a triangle of pixels using `getMood(timeOfDay).mtn` color. Snow cap drawn as a semi-transparent white stripe at the peak.
+**`drawMountains(ctx, tod)`** — Five triangle silhouettes in `getMood(tod).mtn` color with semi-transparent snow caps.
 
-**`drawDistantMeadow()`** — Horizontal gradient strip (y 60–80), then 8 tiny 2px flower dots along the horizon line.
+**`drawDistantMeadow(ctx)`** — Gradient strip y 60–80, then 8 tiny 2px horizon flower dots.
 
-**`drawDistantTrees()`** — Five small pine tree shapes in the far distance (right side). Each: trunk (2px), dark body, lighter top.
+**`drawDistantTrees(ctx)`** — Five small pine shapes on the right side of the far distance.
 
-**`drawMidMeadow()`** — Gradient strip (y 78–130). Adds a stipple grass texture via sine-wave scattered `midLt` pixels.
+**`drawMidMeadow(ctx)`** — Gradient strip y 78–130 with sine-wave stipple grass texture.
 
-**`drawStream(wf)`** — Draws the stream from horizon to foreground. Per row: bank pixels on each side (dark green), stream pixels with tricolor water gradient (dark edges, mid and bright center), animated foam sparkle using `wf` (wave frame), rocks on alternating rows every 11px below y=90.
+**`drawStream(ctx, wf)`** — Stream from horizon to foreground. Per row: dark bank pixels, tricolor water gradient, animated foam sparkle from `wf`, river rocks every 11px below y=90.
 
-**`drawForegroundGrass()`** — Base gradient fill (y 128–216), then layered pixel grass blades: three adjacent pixels per clump in `fgLt`, `fgVlt`, `fgMd`, spaced by `spacing` (grows with y for perspective). Grass is skipped within 6px of the stream.
+**`drawForegroundGrass(ctx)`** — Gradient base fill y 128–216, then layered pixel grass blades (three-pixel clumps in `fgLt/fgVlt/fgMd`, spacing grows with y). Skips within 6px of stream.
 
-**`drawCottWindow(cxW, topY, night)`** — Draws a single cottage window: frame, sill, pane (blue in day, golden `#FFE08A` at night), cross dividers, and a specular highlight stripe. Used twice in `drawCottage`.
+**`drawCottWindow(ctx, cxW, topY, night)`** — Single cottage window: frame, sill, pane (blue day / golden night), cross dividers, specular highlight stripe.
 
-**`drawCottage()`** — The main scene building (center-right, cx=205). Renders in layers:
-1. Clapboard walls with siding lines every 3px and gradient shading (lighter left, darker right)
-2. Shingle roof (apex y=99, eave y=128), row-by-row with 4-shade repeating shingle pattern
-3. Attic window: golden glow at night, steel blue by day
-4. Chimney (right of apex) with smoke puffs above (opacity reduced at night)
-5. Two side windows via `drawCottWindow`
-6. Flower box under left window with 5 colored stems
-7. Pink door (left of center) with panels, frame, and gold doorknob
-8. Stone steps below door
-9. Climbing rose vines around wall edges (9 rose positions)
-10. Sunflower pot to the right of the door
+**`drawCottage(ctx, tod)`** — Main scene building (cx=205). Renders in order: shadow, clapboard walls with siding, shingle roof (4-shade per-row pattern), attic window, chimney + smoke, two side windows via `drawCottWindow`, flower box, pink door with panels and knob, stone steps, 9 climbing rose positions, sunflower pot.
 
-**`leafBlob(x, y, w, h)`** — Draws a single elliptical leaf mass. Iterates all pixels within the ellipse and fills with random-ish `leafDk/leafMd/leafLt` colors based on position modulo. Highlights one-in-three pixels on a lighter shade. Bounds-clamps to prevent out-of-range canvas writes.
+**`leafBlob(ctx, x, y, w, h)`** — Elliptical leaf mass. Fills pixels within ellipse using position-modulo color selection across `leafDk/leafMd/leafLt`. Adds `leafHi` highlights. Bounds-clamps to prevent out-of-range writes.
 
-**`drawForegroundTree()`** — Large tree at the left edge. Trunk drawn row-by-row: centers around x=20, curves sinusoidally, widens from top to bottom. A horizontal branch sweeps right at y≈56–68 (the swing attachment point). Seven `leafBlob` calls cover the canopy, overlapping into the sky.
+**`drawForegroundTree(ctx)`** — Large left-edge tree. Trunk drawn row-by-row (sinusoidal curve, widening with y). Horizontal branch at y≈56–68 (swing attachment). Seven `leafBlob` calls for the canopy.
 
-**`drawSwing()`** — Rope swing hanging from the tree branch. Two vertical ropes (`ax=64, bx=92`), a top rail, 6 alternating-color seat slats, a seat board, two armrests, two forward legs with a shadow.
+**`drawSwing(ctx)`** — Rope swing hanging from the tree branch: two ropes, top rail, 6 alternating seat slats, seat board, armrests, forward legs, shadow.
 
-**`drawWildflower(x, y, col, h)`** — Single tiny flower: 1px stem, 4-pixel cross petals in `col`, 1px yellow center.
+**`drawWildflower(ctx, x, y, col, h)`** — 1px stem, 4-pixel cross petals, 1px yellow center.
 
-**`drawPath()`** — A dirt path from y=158 to the foreground, centered around x=192. Width grows with depth. Alternating dark/light rows with darker edge pixels. Slight sine wave wobble.
+**`drawPath(ctx)`** — Dirt path y=158 to foreground, centered ~x=192. Width grows with depth, sine wobble, alternating dark/light rows.
 
-**`drawTint()`** — If the current mood has a `tint`, fills the entire canvas with a semi-transparent color overlay (blue-indigo at night, warm amber at dusk).
+**`drawTint(ctx, tod)`** — Semi-transparent color fill over the entire canvas if `getMood(tod).tint` is set.
 
-**`drawFireflies(tick)`** — Animates 16 fireflies. Each oscillates in an x/y Lissajous pattern derived from `tick` + per-firefly seed. Blinks on/off using `tick` modulo. Draws a 1px core with 4 surrounding dim glow pixels.
+**`drawFireflies(ctx, tick)`** — 16 fireflies in Lissajous oscillation, blinking on/off from `tick` modulo. 1px core + 4 dim glow pixels each.
 
-**`drawVignette()`** — Darkens the left 8px and right 8px edges column-by-column with increasing opacity, plus a dark strip at the very bottom.
+**`drawVignette(ctx)`** — Darkens left/right 8px edges by column, plus dark strip at bottom.
 
-**`draw(wf, tick)`** — Master draw call. Calls all draw functions in correct back-to-front order: sky → mountains → distant meadow → distant trees → mid meadow → stream → foreground grass → cottage → wildflowers → foreground tree → swing → path → tint → fireflies → vignette.
+**`draw(ctx, wf, tick, tod)`** — Master draw call. Correct back-to-front order: sky → mountains → distant meadow → distant trees → mid meadow → stream → foreground grass → cottage → wildflowers → foreground tree → swing → path → tint → fireflies → vignette.
 
----
+### Module-level sprites
 
-## JavaScript — Sprites
-
-**`sprites` object** — One function per plot-point icon, each receiving its `<canvas>` element and drawing directly into it with `fillRect` calls:
+**`sprites`** — Object of canvas-painting functions, one per plot-point icon. Each receives its `<canvas>` and draws using `fillRect` calls:
 - `scroll` — Rolled parchment with red wax seal (Substack)
 - `lantern` — Hanging lantern with glowing interior (GitHub)
 - `mailbox` — Red mailbox with flag up (working-on)
@@ -151,84 +178,95 @@ Full-viewport root container (`100vw × 100vh`). Everything is absolutely positi
 - `books` — Stack of three colored books with bookmarks (reading)
 - `music` — Vinyl record with red label and musical note sparks (music)
 
-**`paintSprites()`** — Queries all `.pp-sprite` canvases, reads their `data-sprite` attribute, and calls the matching sprite function.
+**`paintSprites()`** — Queries all `.pp-sprite` canvases, reads `data-sprite`, calls the matching sprite function. Called once in a mount effect.
+
+### Module-level layout
+
+**`plotPos`** — Position config for 6 plot points: `{ b: bottom%, l: left%, sc: scale }`.
+
+**`spotPos`** — Position config for 2 scene spots: `{ cx: left%, cyB: bottom%, w%, h% }`.
+
+**`positionAll()`** — Computes absolute pixel positions for all plot points and scene spots from their percentage configs. Sprite display size = `nativeWidth × spriteScale × sc` where `spriteScale` is `2.7` (desktop) / `2.2` (tablet <768px) / `1.8` (mobile <480px). Called on mount and resize.
+
+### React component: state and refs
+
+| Ref | Purpose |
+|---|---|
+| `canvasRef` | The `<canvas>` element |
+| `todRef` | Current TOD for the RAF loop (kept in sync with `timeOfDay` state) |
+| `tickRef` | Animation tick counter, incremented each RAF frame |
+| `rafRef` | Current `requestAnimationFrame` handle for cancellation |
+| `mailboxBtnRef` | Mailbox button — used for popup positioning and focus return |
+| `mailboxPopupRef` | Mailbox popup — used for imperative position setting |
+| `mpCloseRef` | Mailbox close button — focused on open |
+| `chairBtnRef` | Chair button — focus return on close |
+| `cpCloseRef` | Chair close button — focused on open |
+| `overlayRef` | Overlay div — used for focus trap |
+| `overlayCloseRef` | Overlay close button — focused on open |
+| `overlayTriggerRef` | Stores the element that opened the overlay for focus return |
+
+| State | Purpose |
+|---|---|
+| `timeOfDay` | Current TOD (`'day' \| 'dusk' \| 'night'`) — drives button active state |
+| `mailboxOpen` | Whether the mailbox popup is visible |
+| `chairOpen` | Whether the chair popup is visible |
+| `overlayType` | Which overlay is open (`'reading' \| 'listening' \| 'project' \| null`) |
+
+### React component: effects
+
+**Canvas setup + animation loop** (`[]`) — Gets the 2D context, sets `imageSmoothingEnabled = false`. Defines `loop()` (increments `tickRef`, calls `draw(ctx, wf, tick, todRef.current)`, schedules next RAF) and `startLoop()` (cancels existing RAF, skips loop if `prefers-reduced-motion`). Adds/removes a `visibilitychange` listener to pause/resume on tab hide. Cleans up RAF on unmount.
+
+**TOD ref sync** (`[timeOfDay]`) — Keeps `todRef.current` in sync so the RAF loop sees state changes without restarting.
+
+**Auto-TOD on mount** (`[]`) — Reads `new Date().getHours()` and sets initial TOD: night (20–5), dusk (18–19), day (6–17).
+
+**Sprites + layout** (`[]`) — Calls `paintSprites()` and `positionAll()` after first render.
+
+**Resize handler** (`[mailboxOpen]`) — Calls `positionAll()` on resize; if mailbox is open, also calls `positionMailboxPopup()` to re-clamp.
+
+**Global Escape key** (`[overlayType, mailboxOpen, chairOpen, ...]`) — Priority order: close overlay → close mailbox with focus return → close chair with focus return.
+
+**Outside-click close** (`[mailboxOpen, chairOpen, ...]`) — Closes the relevant popup if a click lands outside both its trigger and its container. Does not move focus (user clicked elsewhere intentionally).
+
+### React component: handlers
+
+**`positionMailboxPopup()`** — Reads `mailboxBtnRef` bounding rect, clamps horizontal position to `min(210, viewportWidth-20)`, positions popup above the button.
+
+**`openMailbox()` / `closeMailbox()` / `closeMailboxFocus()`** — Open: closes overlay/chair, opens popup, sets `aria-expanded`, focuses close button. Close: hides popup, clears `aria-expanded`. CloseWithFocus: close + return focus to trigger.
+
+**`handleMailboxToggle()`** — Toggles between `openMailbox` and `closeMailboxFocus`.
+
+**`openChair()` / `closeChair()` / `closeChairFocus()`** — Same pattern as mailbox.
+
+**`handleChairToggle()`** — Toggles between `openChair` and `closeChairFocus`.
+
+**`openOverlay(type, trigger)`** — Closes both popups, stores trigger ref, sets `overlayType`, focuses close button.
+
+**`closeOverlay()`** — Clears `overlayType`, returns focus to stored trigger.
+
+**`handleOverlayKeyDown(e)`** — Focus trap: on Tab/Shift-Tab, wraps focus between first and last focusable elements inside `overlayRef`.
+
+**`handleTOD(tod)`** — Sets both `todRef.current` and `timeOfDay` state.
+
+### React component: render helpers
+
+**`renderMailboxBody()`** — Splits `data.statusMessage.message` on `\n`, renders each non-empty line prefixed with `▶`. Falls back to hardcoded text if no Sanity document.
+
+**`renderOverlayContent()`** — Branches on `overlayType`:
+- `'reading'` — Maps `data.readingList.books` to `.list-item` rows. Icon cycled from `BOOK_ICONS` by index. Progress bar rendered as 5 `.pb-seg` divs.
+- `'listening'` — Maps `data.listeningList.tracks` to `.list-item` rows. Icon cycled from `TRACK_ICONS`.
+- `'project'` — Renders project card from `data.currentProject`: status tag, title, description, tech stack line, next steps line, GitHub link if present.
+
+**`overlayTitle()`** — Returns the overlay header string for the current `overlayType`.
+
+**`renderChairBody()`** — (inline in JSX) Splits `data.chairNote.message` on `\n` and renders with `<br/>` between lines. Falls back to original hardcoded note if no Sanity document published.
 
 ---
 
-## JavaScript — Layout
+## `index.html` (archived)
 
-**`plotPos`** — Position config for the 6 plot points: `{b: bottom%, l: left%, sc: scale}`. Percentages are applied to `window.innerWidth/Height`.
+The original V1.2 vanilla HTML/CSS/JS implementation. Kept at the repo root as a reference of the pre-Next.js state. All logic described above exists here as imperative JS with module-level variables instead of React state and refs.
 
-**`spotPos`** — Position config for the 2 scene spots: `{cx: left%, cyB: bottom%, w: width%, h: height%}`. Applied as CSS percentages.
+## `InnerPlotsV1.2/indexv1.1.html` (archived)
 
-**`positionAll()`** — Called on load and on `resize`. Computes absolute pixel positions for all plot points and scene spots from their percentage configs. Also sets sprite display size: `nativeWidth × spriteScale × sc`, where `spriteScale` is `2.7` (desktop) / `2.2` (tablet, <768px) / `1.8` (mobile, <480px).
-
----
-
-## JavaScript — Popup: Mailbox
-
-**`positionPopup()`** — Reads the mailbox button's `getBoundingClientRect`, horizontally centers the popup over it, clamps position so it never overflows viewport edges (accounts for `popW = min(210, viewportWidth-20)`), positions it above the button using `bottom = window.innerHeight - r.top + 10`.
-
-**`openMailbox()`** — Closes any open overlay and chair popup, positions and opens the mailbox popup, sets `aria-expanded="true"` on the trigger, focuses the close button.
-
-**`closeMailbox()`** — Removes `open` class, sets `aria-expanded="false"`. Does not move focus (for outside-click dismissal).
-
-**`closeMailboxFocus()`** — Calls `closeMailbox()` then returns focus to `mailboxBtn` (for close-button click and Escape key).
-
-Mailbox button click handler: toggles between `openMailbox()` and `closeMailboxFocus()`.
-
----
-
-## JavaScript — Popup: Chair
-
-**`openChair()`** — Closes overlay and mailbox popup, adds `open` class to chair popup, sets `aria-expanded="true"`, focuses the close button.
-
-**`closeChair()`** — Removes `open` class, sets `aria-expanded="false"`. No focus move (for outside-click).
-
-**`closeChairFocus()`** — Calls `closeChair()` then returns focus to `chairBtn`.
-
-Chair button click handler: toggles between `closeChairFocus()` and `openChair()`.
-
-**Outside-click handler** (`document click`) — If a click lands outside both the trigger and popup, dismisses that popup via the non-focusing close variant.
-
----
-
-## JavaScript — Overlay (Content Drawer)
-
-**`readingList[]`** — Array of 3 book objects: `{icon, title, sub, note, progress (1–5)}`.
-
-**`listeningList[]`** — Array of 4 music/podcast objects: `{icon, title, sub, note}`.
-
-**`overlayTrigger`** — Stores the element that opened the overlay, so focus can be returned on close.
-
-**`openOverlay(type, triggerEl)`** — Closes both popups (via `closeMailbox`/`closeChair`), stores the trigger element, renders the appropriate content into `#overlay-content` as HTML, adds `open` class to slide the drawer up, focuses the close button. Types: `'reading'`, `'listening'`, `'project'`.
-
-**`closeOverlay()`** — Removes `open` class, returns focus to `overlayTrigger`, clears the trigger reference.
-
-**Focus trap** (`overlay keydown`) — On Tab/Shift-Tab: queries all focusable elements inside the overlay, wraps focus from last→first (Tab) or first→last (Shift+Tab).
-
-**Escape key handler** (`document keydown`) — Priority order: if overlay open → `closeOverlay()`; else if mailbox open → `closeMailboxFocus()`; else if chair open → `closeChairFocus()`.
-
----
-
-## JavaScript — Time of Day
-
-**TOD button click handler** — Sets `timeOfDay` to the clicked button's `data-tod`, updates `active` class and `aria-pressed` on all three buttons.
-
-**`autoTOD()` (IIFE)** — Runs once on load. Reads `new Date().getHours()` and sets the initial TOD: `night` (20:00–05:59), `dusk` (18:00–19:59), `day` (06:00–17:59). Updates button states accordingly.
-
----
-
-## JavaScript — Animation Loop
-
-**`reduced`** — Boolean from `matchMedia('prefers-reduced-motion: reduce')`. If true, draws a single static frame and never starts the loop.
-
-**`loop()`** — Increments `tick` by `0.16` each frame, calls `draw(Math.floor(tick) % 6, tick)`, schedules the next frame via `requestAnimationFrame`.
-
-**`startLoop()`** — Cancels any existing RAF, then either draws a single static frame (reduced motion) or starts `loop()`.
-
-**`visibilitychange` handler** — Pauses the RAF when the tab is hidden, restarts via `startLoop()` when visible again.
-
-**`resize` handler** — Calls `positionAll()` to recompute all element positions; if the mailbox popup is open, also calls `positionPopup()` to re-clamp its position.
-
-**Boot sequence** (last line) — `positionAll()` → `paintSprites()` → `startLoop()`.
+The V1.1 implementation: Teletubbies-style mound house, stream centered rather than left-side, no foreground tree or swing, no scene spots, no cottage.
