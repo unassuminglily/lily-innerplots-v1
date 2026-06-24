@@ -80,7 +80,7 @@ function drawCelestial(ctx: CanvasRenderingContext2D,M: ReturnType<typeof getMoo
   } else {
     const cx2=42,cy2=22,r=9;
     for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++) if(dx*dx+dy*dy<=r*r){ctx.fillStyle='#EAEFF7';ctx.fillRect(cx2+dx,cy2+dy,1,1);}
-    ctx.fillStyle='#C7D2E2';px(ctx,44,19,3,3);px(ctx,38,24,2,2);px(ctx,45,26,2,2);
+    px(ctx,44,19,3,3,'#C7D2E2');px(ctx,38,24,2,2,'#C7D2E2');px(ctx,45,26,2,2,'#C7D2E2');
   }
 }
 
