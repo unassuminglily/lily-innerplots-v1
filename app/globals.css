@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap');
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100%;overflow:hidden;background:#10131f;font-family:'Silkscreen',monospace}
+html,body{width:100%;height:100%;overflow:hidden;max-width:100vw;background:#10131f;font-family:'Silkscreen',monospace}
 #scene{position:relative;width:100vw;height:100vh;overflow:hidden}
 canvas#meadow{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
 
@@ -83,8 +83,11 @@ canvas#meadow{display:block;width:100%;height:100%;image-rendering:pixelated;ima
   #overlay{height:78%;padding:14px 18px 20px}
   #title h1{white-space:normal;text-align:center}
   #title p{text-align:center}
-  #tod-toggle{gap:4px;bottom:2%;right:2%}
-  .tod-btn{font-size:0.42rem;min-height:40px}
+  /* Compact icon-only TOD squares at top-right */
+  #tod-toggle{top:8px;right:8px;bottom:auto;gap:3px}
+  .tod-btn{width:34px;height:34px;min-height:34px;padding:0;justify-content:center;font-size:0;border-radius:4px}
+  .tod-icon{font-size:15px;line-height:1}
+  .tod-text{display:none}
 }
 @media(max-width:380px){
   #mailbox-popup{font-size:0.55rem}

@@ -274,6 +274,18 @@ const plotPos: Record<string,{b:number,l:number,sc:number}> = {
   'pp-cooking':{b:50,l:67,sc:1.28},'pp-reading':{b:55,l:79,sc:1.28},
   'pp-music':{b:46,l:89,sc:1.28},'pp-mailbox':{b:18,l:66,sc:1.35},
 }
+// Shifted left for portrait mobile — same vertical positions, tightened horizontal spread
+const plotPosMobile: Record<string,{b:number,l:number,sc:number}> = {
+  'pp-github':{b:56,l:7,sc:1},'pp-substack':{b:50,l:20,sc:1},
+  'pp-cooking':{b:50,l:58,sc:1.28},'pp-reading':{b:55,l:70,sc:1.28},
+  'pp-music':{b:46,l:81,sc:1.28},'pp-mailbox':{b:18,l:57,sc:1.35},
+}
+
+const plotPosMobile: Record<string,{b:number,l:number,sc:number}> = {
+  'pp-github':{b:56,l:9,sc:1},'pp-substack':{b:50,l:19,sc:1},
+  'pp-cooking':{b:50,l:55,sc:1.1},'pp-reading':{b:55,l:66,sc:1.1},
+  'pp-music':{b:46,l:77,sc:1.1},'pp-mailbox':{b:18,l:54,sc:1.15},
+}
 const spotPos: Record<string,{cx:number,cyB:number,w:number,h:number}> = {
   'ss-chair':{cx:19.5,cyB:24,w:13,h:17},'ss-door':{cx:53.4,cyB:29,w:8,h:15}
 }
@@ -281,7 +293,8 @@ const spotPos: Record<string,{cx:number,cyB:number,w:number,h:number}> = {
 function positionAll() {
   const W=window.innerWidth,H=window.innerHeight
   const spriteScale=W<480?1.8:W<768?2.2:2.7
-  Object.entries(plotPos).forEach(([id,p])=>{
+  const positions=W<600?plotPosMobile:plotPos
+  Object.entries(positions).forEach(([id,p])=>{
     const el=document.getElementById(id) as HTMLElement|null;if(!el)return;
     el.style.bottom=(p.b*H/100)+'px';el.style.left=(p.l*W/100)+'px';
     const sp=el.querySelector<HTMLCanvasElement>('.pp-sprite');
@@ -686,9 +699,13 @@ export default function MeadowCanvas({data}: Props) {
             className={`tod-btn${timeOfDay===tod?' active':''}`}
             data-tod={tod}
             aria-pressed={timeOfDay===tod}
+            aria-label={`Set time of day to ${tod}`}
             onClick={() => handleTOD(tod)}
           >
-            {tod==='day'?'☀ day':tod==='dusk'?'🌅 dusk':'🌙 night'}
+            <span className="tod-icon" aria-hidden="true">
+              {tod==='day'?'☀':tod==='dusk'?'🌅':'🌙'}
+            </span>
+            <span className="tod-text">{tod}</span>
           </button>
         ))}
       </div>
